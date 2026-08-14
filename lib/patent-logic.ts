@@ -1,0 +1,143 @@
+/**
+ * Patent status decision logic — the single source of truth for this project.
+ *
+ * Per CLAUDE.md / openspec/project.md (confirmed with client 2026-08-06):
+ *   1. today > patent-edate                      -> 案件已消滅
+ *   2. today <= charge-expir-date                 -> 案件存續
+ *   3. today <= charge-expir-date + 6 個月         -> 案件逾期但尚在補繳期內
+ *   4. today <= charge-expir-date + 18 個月        -> 案件逾補繳期但尚可復權
+ *   5. else                                        -> 案件已消滅
+ *
+ * This file must stay UI-free (no React, no fetch). Components only call these
+ * functions; they must never re-implement the date comparisons themselves.
+ */
+
+export type ApplClass = 1 | 2 | 3;
+
+export const APPL_CLASS_LABEL: Record<ApplClass, string> = {
+  1: "發明",
+  2: "新型",
+  3: "設計",
+};
+
+/**
+ * 從申請案號第 4 碼推導 applclass。回傳 null 表示案號格式不足以判斷
+ * （例如長度不足 4 碼，或第 4 碼不屬於 1/2/3）。
+ */
+export function parseApplClass(applno: string): ApplClass | null {
+  const normalized = applno.trim();
+  const fourthChar = normalized.charAt(3);
+  if (fourthChar === "1" || fourthChar === "2" || fourthChar === "3") {
+    return Number(fourthChar) as ApplClass;
+  }
+  return null;
+}
+
+export type PatentStatus =
+  | "案件存續"
+  | "案件逾期但尚在補繳期內"
+  | "案件逾補繳期但尚可復權"
+  | "案件已消滅";
+
+export const STATUS_TONE: Record<PatentStatus, "alive" | "grace" | "revival" | "dead"> = {
+  案件存續: "alive",
+  案件逾期但尚在補繳期內: "grace",
+  案件逾補繳期但尚可復權: "revival",
+  案件已消滅: "dead",
+};
+
+export interface EvaluatePatentStatusInput {
+  /** 台灣系統日（比對基準日） */
+  today: Date;
+  /** 專利權止日 */
+  patentEdate: Date;
+  /** 年費有效日期 */
+  chargeExpirDate: Date;
+}
+
+/** 將日期正規化為 UTC 午夜的時間戳，避免時區/時分秒造成的比較誤差。 */
+function toUtcMidnight(date: Date): number {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/** a 是否嚴格晚於 b（僅比較年月日）。 */
+function isAfter(a: Date, b: Date): boolean {
+  return toUtcMidnight(a) > toUtcMidnight(b);
+}
+
+/** 在指定日期基礎上加上 N 個月（處理月底進位，例如 1/31 + 1mo -> 3/3 由 JS Date 自動進位）。 */
+export function addMonthsUtc(date: Date, months: number): Date {
+  const base = toUtcMidnight(date);
+  const d = new Date(base);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, d.getUTCDate()));
+}
+
+export function evaluatePatentStatus({
+  today,
+  patentEdate,
+  chargeExpirDate,
+}: EvaluatePatentStatusInput): PatentStatus {
+  // Step 1: 已逾專利權止日 -> 案件已消滅
+  if (isAfter(today, patentEdate)) return "案件已消滅";
+
+  // Step 2: 未逾年費有效日期 -> 案件存續
+  if (!isAfter(today, chargeExpirDate)) return "案件存續";
+
+  // Step 3: 未逾「年費有效日期 + 6 個月」-> 逾期但尚在補繳期內
+  const graceDeadline = addMonthsUtc(chargeExpirDate, 6);
+  if (!isAfter(today, graceDeadline)) return "案件逾期但尚在補繳期內";
+
+  // Step 4: 未逾「年費有效日期 + 18 個月」-> 逾補繳期但尚可復權
+  const revivalDeadline = addMonthsUtc(chargeExpirDate, 18);
+  if (!isAfter(today, revivalDeadline)) return "案件逾補繳期但尚可復權";
+
+  // Step 5: 其餘 -> 案件已消滅
+  return "案件已消滅";
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
+export interface DateRulerPoint {
+  key: "chargeExpir" | "grace6" | "revival18" | "patentEdate";
+  label: string;
+  date: Date;
+}
+
+export interface DateRuler {
+  points: DateRulerPoint[];
+  /** 今日在時間軸上的位置，0~1，供 UI 繪製「今日」標記使用。 */
+  todayRatio: number;
+}
+
+/**
+ * 把決策邏輯本身轉成可繪製的時間軸資料（日期尺 signature 元件）：
+ * 年費有效日期 / +6個月 / +18個月 / 專利權止日 四個刻度，加上今日座標。
+ */
+export function buildDateRuler({ today, patentEdate, chargeExpirDate }: EvaluatePatentStatusInput): DateRuler {
+  const grace6 = addMonthsUtc(chargeExpirDate, 6);
+  const revival18 = addMonthsUtc(chargeExpirDate, 18);
+
+  const points: DateRulerPoint[] = [
+    { key: "chargeExpir", label: "年費有效日期", date: chargeExpirDate },
+    { key: "grace6", label: "+6個月", date: grace6 },
+    { key: "revival18", label: "+18個月", date: revival18 },
+    { key: "patentEdate", label: "專利權止日", date: patentEdate },
+  ];
+
+  const timestamps = points.map((p) => toUtcMidnight(p.date));
+  const domainStart = Math.min(...timestamps);
+  const domainEnd = Math.max(...timestamps);
+  const span = domainEnd - domainStart || 1;
+  const todayRatio = clamp((toUtcMidnight(today) - domainStart) / span, 0, 1);
+
+  return { points, todayRatio };
+}
+
+export function formatDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}/${m}/${d}`;
+}

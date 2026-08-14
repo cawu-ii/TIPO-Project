@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+*.tsbuildinfo
+.DS_Store
+.env
+.env.local
+.env*.local
+
+# 業務/機密性質檔案，不進版控（報價單、業主提供之真實客戶資料、TIPO 官方 PDF 說明文件）
+*報價單*.xlsx
+ref_data-*.xlsx
+專利API說明文件.pdf
