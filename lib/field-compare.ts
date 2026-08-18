@@ -91,6 +91,7 @@ export interface NormalizationOptions {
   ignorePatentNoFormat: boolean;
 }
 
+/** 最嚴謹的比對基準（全部不忽略）；fieldsMatch/buildCaseComparison 省略選項參數時的預設值。 */
 export const DEFAULT_NORMALIZATION_OPTIONS: NormalizationOptions = {
   ignoreCase: false,
   ignoreWidth: false,
@@ -98,6 +99,16 @@ export const DEFAULT_NORMALIZATION_OPTIONS: NormalizationOptions = {
   ignorePersonOrder: false,
   ignoreDateFormat: false,
   ignorePatentNoFormat: false,
+};
+
+/** UI 畫面載入時的建議預設值（全部忽略），業主回饋純格式差異誤判太多，改以此為起始狀態。 */
+export const RECOMMENDED_NORMALIZATION_OPTIONS: NormalizationOptions = {
+  ignoreCase: true,
+  ignoreWidth: true,
+  ignorePunctuation: true,
+  ignorePersonOrder: true,
+  ignoreDateFormat: true,
+  ignorePatentNoFormat: true,
 };
 
 /** 忽略多餘空白／斷行差異後再比對，避免 Excel 儲存格常見的格式雜訊造成誤判。一律套用。 */

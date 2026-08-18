@@ -17,7 +17,7 @@ import { ColumnMappingPanel } from "@/components/dashboard/column-mapping-panel"
 import { ComparisonOptions } from "@/components/dashboard/comparison-options";
 import { QueryBanners, type GroupErrorInfo } from "@/components/dashboard/query-banners";
 import { toComparableRow, type PatentRow } from "@/lib/mock-data";
-import { buildCaseComparison, DEFAULT_COMPARE_KEYS, DEFAULT_NORMALIZATION_OPTIONS } from "@/lib/field-compare";
+import { buildCaseComparison, DEFAULT_COMPARE_KEYS, RECOMMENDED_NORMALIZATION_OPTIONS } from "@/lib/field-compare";
 import { downloadTemplate, exportAnalysisReport, exportComparisonReport, exportTipoRawData } from "@/lib/excel";
 import { detectExcelColumns, parseUploadedExcelFile, type ColumnMapping, type DetectedColumn } from "@/lib/parse-upload";
 import { buildRowsFromApi } from "@/lib/build-rows";
@@ -67,8 +67,8 @@ export default function Page() {
   const [selectedGreenKeys, setSelectedGreenKeys] = React.useState<Set<string>>(
     () => new Set(DEFAULT_COMPARE_KEYS)
   );
-  // 比對選項（忽略差異）：預設全關，維持最嚴謹比對；session 層級狀態，不隨上傳檔案重設。
-  const [normalizationOptions, setNormalizationOptions] = React.useState(DEFAULT_NORMALIZATION_OPTIONS);
+  // 比對選項（忽略差異）：預設全部忽略純格式差異（業主回饋），session 層級狀態，不隨上傳檔案重設。
+  const [normalizationOptions, setNormalizationOptions] = React.useState(RECOMMENDED_NORMALIZATION_OPTIONS);
   const [comparisonDetailRow, setComparisonDetailRow] = React.useState<PatentRow | null>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const comparisonResults = React.useMemo(() => {
