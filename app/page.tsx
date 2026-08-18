@@ -17,9 +17,20 @@ import { ColumnMappingPanel } from "@/components/dashboard/column-mapping-panel"
 import { ComparisonOptions } from "@/components/dashboard/comparison-options";
 import { QueryBanners, type GroupErrorInfo } from "@/components/dashboard/query-banners";
 import { toComparableRow, type PatentRow } from "@/lib/mock-data";
-import { buildCaseComparison, DEFAULT_COMPARE_KEYS, RECOMMENDED_NORMALIZATION_OPTIONS } from "@/lib/field-compare";
+import {
+  buildCaseComparison,
+  DEFAULT_COMPARE_KEYS,
+  GREEN_FIELD_DEFS,
+  RECOMMENDED_NORMALIZATION_OPTIONS,
+} from "@/lib/field-compare";
 import { downloadTemplate, exportAnalysisReport, exportComparisonReport, exportTipoRawData } from "@/lib/excel";
-import { detectExcelColumns, parseUploadedExcelFile, type ColumnMapping, type DetectedColumn } from "@/lib/parse-upload";
+import {
+  detectExcelColumns,
+  parseUploadedExcelFile,
+  type ColumnMapping,
+  type ColumnMappingKey,
+  type DetectedColumn,
+} from "@/lib/parse-upload";
 import { buildRowsFromApi } from "@/lib/build-rows";
 import { appendHistoryEntry, summarizeStatusCounts } from "@/lib/history-store";
 import { SettingsDialog } from "@/components/dashboard/settings-dialog";
@@ -75,6 +86,15 @@ export default function Page() {
     if (!rows) return [];
     return rows.map((row) => buildCaseComparison(toComparableRow(row), selectedGreenKeys, normalizationOptions));
   }, [rows, selectedGreenKeys, normalizationOptions]);
+
+  // 業主回饋：欄位對應中選了「不比對」的欄位，順勢帶到「資料比對」頁籤，自動取消勾選，
+  // 不需使用者兩邊各設定一次。只在真的偵測到欄位（已上傳過檔案）後才同步，避免頁面剛載入、
+  // columnMapping 還是空物件時，把預設全選的初始狀態誤清空。
+  React.useEffect(() => {
+    if (detectedColumns.length === 0) return;
+    const mappedKeys = GREEN_FIELD_DEFS.filter((f) => columnMapping[f.key as ColumnMappingKey]).map((f) => f.key);
+    setSelectedGreenKeys(new Set(mappedKeys));
+  }, [columnMapping, detectedColumns.length]);
 
   async function handleFileSelected(selected: File) {
     setFile(selected);

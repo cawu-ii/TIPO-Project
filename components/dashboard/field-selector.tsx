@@ -31,7 +31,10 @@ export function FieldSelector({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-sm font-medium text-ink">選擇需比對欄位（綠底欄位）</p>
-            <p className="text-xs text-ink-muted">勾選的欄位將與智慧局最新資料逐一比對；黃底欄位無須勾選，抓回後自動顯示。</p>
+            <p className="text-xs text-ink-muted">
+              勾選的欄位將與智慧局最新資料逐一比對；黃底欄位無須勾選，抓回後自動顯示。已依「欄位對應」自動預選（未對應到
+              Excel 欄位者已取消勾選），可再自行調整。
+            </p>
           </div>
           <Button variant="outline" size="sm" onClick={toggleAll}>
             {allSelected ? "取消全選" : "全選欄位"}
