@@ -5,25 +5,27 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { buildCaseComparison } from "@/lib/field-compare";
+import { buildCaseComparison, DEFAULT_NORMALIZATION_OPTIONS, type NormalizationOptions } from "@/lib/field-compare";
 import { toComparableRow, type PatentRow } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 export function ComparisonDetailDialog({
   row,
   selectedKeys,
+  normalizationOptions = DEFAULT_NORMALIZATION_OPTIONS,
   onOpenChange,
 }: {
   row: PatentRow | null;
   selectedKeys: Set<string>;
+  normalizationOptions?: NormalizationOptions;
   onOpenChange: (open: boolean) => void;
 }) {
   const [diffOnly, setDiffOnly] = React.useState(false);
 
-  const result = React.useMemo(() => (row ? buildCaseComparison(toComparableRow(row), selectedKeys) : null), [
-    row,
-    selectedKeys,
-  ]);
+  const result = React.useMemo(
+    () => (row ? buildCaseComparison(toComparableRow(row), selectedKeys, normalizationOptions) : null),
+    [row, selectedKeys, normalizationOptions]
+  );
 
   const greenFields = result?.fields.filter((f) => f.category === "green" && f.compared) ?? [];
   const yellowFields = result?.fields.filter((f) => f.category === "yellow") ?? [];

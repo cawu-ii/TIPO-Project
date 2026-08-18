@@ -1,6 +1,12 @@
 import * as XLSX from "xlsx";
 import { formatDate, APPL_CLASS_LABEL } from "./patent-logic";
-import { buildCaseComparison, GREEN_FIELD_DEFS, YELLOW_FIELD_DEFS } from "./field-compare";
+import {
+  buildCaseComparison,
+  DEFAULT_NORMALIZATION_OPTIONS,
+  GREEN_FIELD_DEFS,
+  YELLOW_FIELD_DEFS,
+  type NormalizationOptions,
+} from "./field-compare";
 import { toComparableRow, type PatentRow } from "./mock-data";
 
 /** 下載範例 Excel 範本：僅含 applno 欄位，供使用者依格式填入待查詢案號。 */
@@ -53,9 +59,13 @@ export function exportAnalysisReport(rows: PatentRow[]) {
  * 匯出「欄位比對差異報告」：案件總覽 + 差異明細兩個工作表，保持原始 applno 上傳順序。
  * 只根據使用者本次勾選的比對欄位計算，與畫面「資料比對」頁籤顯示的結果一致。
  */
-export function exportComparisonReport(rows: PatentRow[], selectedKeys: Set<string>) {
+export function exportComparisonReport(
+  rows: PatentRow[],
+  selectedKeys: Set<string>,
+  normalizationOptions: NormalizationOptions = DEFAULT_NORMALIZATION_OPTIONS
+) {
   const now = new Date();
-  const results = rows.map((row) => buildCaseComparison(toComparableRow(row), selectedKeys));
+  const results = rows.map((row) => buildCaseComparison(toComparableRow(row), selectedKeys, normalizationOptions));
 
   const overview = results.map((result) => ({
     申請案號: result.applno,

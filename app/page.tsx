@@ -13,11 +13,13 @@ import { FieldSelector } from "@/components/dashboard/field-selector";
 import { ComparisonStats } from "@/components/dashboard/comparison-stats";
 import { ComparisonPanel } from "@/components/dashboard/comparison-panel";
 import { ComparisonDetailDialog } from "@/components/dashboard/comparison-detail-dialog";
+import { ColumnMappingPanel } from "@/components/dashboard/column-mapping-panel";
+import { ComparisonOptions } from "@/components/dashboard/comparison-options";
 import { QueryBanners, type GroupErrorInfo } from "@/components/dashboard/query-banners";
 import { toComparableRow, type PatentRow } from "@/lib/mock-data";
-import { buildCaseComparison, DEFAULT_COMPARE_KEYS } from "@/lib/field-compare";
+import { buildCaseComparison, DEFAULT_COMPARE_KEYS, DEFAULT_NORMALIZATION_OPTIONS } from "@/lib/field-compare";
 import { downloadTemplate, exportAnalysisReport, exportComparisonReport, exportTipoRawData } from "@/lib/excel";
-import { parseUploadedExcelFile } from "@/lib/parse-upload";
+import { detectExcelColumns, parseUploadedExcelFile, type ColumnMapping, type DetectedColumn } from "@/lib/parse-upload";
 import { buildRowsFromApi } from "@/lib/build-rows";
 import { appendHistoryEntry, summarizeStatusCounts } from "@/lib/history-store";
 import { SettingsDialog } from "@/components/dashboard/settings-dialog";
@@ -57,18 +59,24 @@ export default function Page() {
   const [notFound, setNotFound] = React.useState<string[]>([]);
   const [groupErrors, setGroupErrors] = React.useState<GroupErrorInfo[]>([]);
 
+  // 欄位對應：每次上傳新檔案都重新偵測／重設，不跨檔案記憶（不同版型欄位可能完全不同）。
+  const [detectedColumns, setDetectedColumns] = React.useState<DetectedColumn[]>([]);
+  const [columnMapping, setColumnMapping] = React.useState<ColumnMapping>({});
+
   // 欄位比對頁籤：預設全選綠底欄位，讓對方一開啟就能看到比對結果。
   const [selectedGreenKeys, setSelectedGreenKeys] = React.useState<Set<string>>(
     () => new Set(DEFAULT_COMPARE_KEYS)
   );
+  // 比對選項（忽略差異）：預設全關，維持最嚴謹比對；session 層級狀態，不隨上傳檔案重設。
+  const [normalizationOptions, setNormalizationOptions] = React.useState(DEFAULT_NORMALIZATION_OPTIONS);
   const [comparisonDetailRow, setComparisonDetailRow] = React.useState<PatentRow | null>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const comparisonResults = React.useMemo(() => {
     if (!rows) return [];
-    return rows.map((row) => buildCaseComparison(toComparableRow(row), selectedGreenKeys));
-  }, [rows, selectedGreenKeys]);
+    return rows.map((row) => buildCaseComparison(toComparableRow(row), selectedGreenKeys, normalizationOptions));
+  }, [rows, selectedGreenKeys, normalizationOptions]);
 
-  function handleFileSelected(selected: File) {
+  async function handleFileSelected(selected: File) {
     setFile(selected);
     setFileName(selected.name);
     setRows(null);
@@ -79,6 +87,16 @@ export default function Page() {
     setSampleMode(false);
     setNotFound([]);
     setGroupErrors([]);
+    setDetectedColumns([]);
+    setColumnMapping({});
+
+    try {
+      const { columns, guessedMapping } = await detectExcelColumns(selected);
+      setDetectedColumns(columns);
+      setColumnMapping(guessedMapping);
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : "讀取 Excel 欄位時發生未知錯誤");
+    }
   }
 
   async function handleStartCompare() {
@@ -103,9 +121,9 @@ export default function Page() {
     let parsedApplnoCount = 0;
 
     try {
-      const parsed = await parseUploadedExcelFile(file);
+      const parsed = await parseUploadedExcelFile(file, columnMapping);
       if (parsed.applnos.length === 0) {
-        throw new Error("Excel 中找不到任何申請案號，請確認「申請號」欄位是否有資料");
+        throw new Error("Excel 中找不到任何申請案號，請確認「欄位對應」是否指到正確的欄位");
       }
       parsedApplnoCount = parsed.applnos.length;
       setParsedCount(parsed.applnos.length);
@@ -197,7 +215,7 @@ export default function Page() {
 
   function handleExportComparisonDiff() {
     if (!rows) return;
-    exportComparisonReport(rows, selectedGreenKeys);
+    exportComparisonReport(rows, selectedGreenKeys, normalizationOptions);
   }
 
   function handleExportTipoRawData() {
@@ -256,7 +274,11 @@ export default function Page() {
                   progress={progress}
                   parsedCount={parsedCount}
                   statusMessage={statusMessage}
+                  startDisabled={detectedColumns.length > 0 && !columnMapping.applno}
                 />
+                {detectedColumns.length > 0 && (
+                  <ColumnMappingPanel columns={detectedColumns} mapping={columnMapping} onChange={setColumnMapping} />
+                )}
                 <QueryBanners
                   parseError={parseError}
                   sampleMode={sampleMode}
@@ -283,6 +305,10 @@ export default function Page() {
                 沿用「上傳比對」頁籤抓回的同一批資料；勾選欄位後，系統將逐案比對 Excel 原有資料與智慧局最新回傳值是否相符。
               </p>
               <FieldSelector selectedKeys={selectedGreenKeys} onChange={setSelectedGreenKeys} />
+            </section>
+
+            <section>
+              <ComparisonOptions options={normalizationOptions} onChange={setNormalizationOptions} />
             </section>
 
             <section>
@@ -313,6 +339,7 @@ export default function Page() {
       <ComparisonDetailDialog
         row={comparisonDetailRow}
         selectedKeys={selectedGreenKeys}
+        normalizationOptions={normalizationOptions}
         onOpenChange={(open) => !open && setComparisonDetailRow(null)}
       />
       <SettingsDialog

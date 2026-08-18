@@ -17,6 +17,8 @@ interface UploadZoneProps {
   parsedCount: number | null;
   /** 目前執行階段的說明文字，例如「正在向智慧局查詢…」。 */
   statusMessage: string | null;
+  /** 額外的「開始比對」停用條件（例如欄位對應尚未指定申請案號）。 */
+  startDisabled?: boolean;
 }
 
 export function UploadZone({
@@ -28,6 +30,7 @@ export function UploadZone({
   progress,
   parsedCount,
   statusMessage,
+  startDisabled = false,
 }: UploadZoneProps) {
   const [isDragging, setIsDragging] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -88,7 +91,7 @@ export function UploadZone({
         <Button variant="outline" size="sm" onClick={onDownloadTemplate}>
           <Download className="h-4 w-4" /> 下載範例 Excel 檔
         </Button>
-        <Button variant="seal" size="sm" onClick={onStartCompare} disabled={!fileName || comparing}>
+        <Button variant="seal" size="sm" onClick={onStartCompare} disabled={!fileName || comparing || startDisabled}>
           <PlayCircle className="h-4 w-4" /> {comparing ? "查詢中…" : "開始批次比對"}
         </Button>
       </div>

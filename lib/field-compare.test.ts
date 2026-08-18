@@ -1,8 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { buildCaseComparison, fieldsMatch, GREEN_FIELD_DEFS, YELLOW_FIELD_DEFS } from "./field-compare";
+import {
+  buildCaseComparison,
+  DEFAULT_NORMALIZATION_OPTIONS,
+  fieldsMatch,
+  GREEN_FIELD_DEFS,
+  YELLOW_FIELD_DEFS,
+  type NormalizationOptions,
+} from "./field-compare";
 import type { ComparableRow } from "./field-compare";
 
-describe("fieldsMatch", () => {
+function opts(overrides: Partial<NormalizationOptions>): NormalizationOptions {
+  return { ...DEFAULT_NORMALIZATION_OPTIONS, ...overrides };
+}
+
+describe("fieldsMatch — 基本行為（沿用舊測試，預設 valueType=text、選項全關）", () => {
   it("完全相同的字串視為相符", () => {
     expect(fieldsMatch("SAMTEC, INC.", "SAMTEC, INC.")).toBe(true);
   });
@@ -15,6 +26,53 @@ describe("fieldsMatch", () => {
   it("null/undefined 視為空字串比對", () => {
     expect(fieldsMatch(null, "")).toBe(true);
     expect(fieldsMatch(undefined, "有值")).toBe(false);
+  });
+});
+
+describe("fieldsMatch — 異體字（無條件套用，不受選項控制）", () => {
+  it("啓／啟視為同一字，即使所有正規化選項都關閉", () => {
+    expect(fieldsMatch("閻啓泰", "閻啟泰", "text")).toBe(true);
+    expect(fieldsMatch("林景郁; 閻啓泰", "林景郁; 閻啟泰", "personList")).toBe(true);
+  });
+});
+
+describe("fieldsMatch — 六種忽略差異選項（業主提供範例）", () => {
+  it("忽略大小寫：The Boeing = THE BOEING", () => {
+    expect(fieldsMatch("The Boeing", "THE BOEING", "text")).toBe(false);
+    expect(fieldsMatch("The Boeing", "THE BOEING", "text", opts({ ignoreCase: true }))).toBe(true);
+  });
+
+  it("忽略全形半形：Ｉ７７５ = I775", () => {
+    expect(fieldsMatch("Ｉ７７５", "I775", "text")).toBe(false);
+    expect(fieldsMatch("Ｉ７７５", "I775", "text", opts({ ignoreWidth: true }))).toBe(true);
+  });
+
+  it("忽略標點符號：King, R. (US) = KingR(US)", () => {
+    expect(fieldsMatch("King, R. (US)", "KingR(US)", "text")).toBe(false);
+    expect(fieldsMatch("King, R. (US)", "KingR(US)", "text", opts({ ignorePunctuation: true }))).toBe(true);
+  });
+
+  it("忽略多人名單排列順序：林景郁; 閻啟泰 = 閻啟泰;林景郁", () => {
+    expect(fieldsMatch("林景郁; 閻啟泰", "閻啟泰;林景郁", "personList")).toBe(false);
+    expect(
+      fieldsMatch("林景郁; 閻啟泰", "閻啟泰;林景郁", "personList", opts({ ignorePersonOrder: true }))
+    ).toBe(true);
+  });
+
+  it("忽略日期格式：2022/09/01 = 2022/9/1 = 20220901", () => {
+    expect(fieldsMatch("2022/09/01", "2022/9/1", "date")).toBe(false);
+    expect(fieldsMatch("2022/09/01", "2022/9/1", "date", opts({ ignoreDateFormat: true }))).toBe(true);
+    expect(fieldsMatch("2022/09/01", "20220901", "date", opts({ ignoreDateFormat: true }))).toBe(true);
+  });
+
+  it("忽略專利號國別碼與橫槓：TWI775123 = TW-I775123（只比對數字）", () => {
+    expect(fieldsMatch("TWI775123", "TW-I775123", "patentNo")).toBe(false);
+    expect(fieldsMatch("TWI775123", "TW-I775123", "patentNo", opts({ ignorePatentNoFormat: true }))).toBe(true);
+    expect(fieldsMatch("TWI775123", "I775123", "patentNo", opts({ ignorePatentNoFormat: true }))).toBe(true);
+  });
+
+  it("未勾選任何選項時，格式差異一律視為不符（維持嚴謹比對）", () => {
+    expect(fieldsMatch("2022/09/01", "2022/9/1", "date", DEFAULT_NORMALIZATION_OPTIONS)).toBe(false);
   });
 });
 
@@ -83,5 +141,21 @@ describe("buildCaseComparison", () => {
     const row = makeRow();
     const result = buildCaseComparison(row, new Set());
     expect(result.fields.length).toBe(GREEN_FIELD_DEFS.length + YELLOW_FIELD_DEFS.length);
+  });
+
+  it("傳入正規化選項時，會依欄位 valueType 套用（例：日期欄位忽略格式差異）", () => {
+    const row = makeRow({
+      internal: { applDate: "2022/09/01" },
+      tipo: { applDate: "2022/9/1" },
+    });
+    const withoutOptions = buildCaseComparison(row, new Set(["applDate"]));
+    expect(withoutOptions.mismatchCount).toBe(1);
+
+    const withDateOption = buildCaseComparison(
+      row,
+      new Set(["applDate"]),
+      { ...DEFAULT_NORMALIZATION_OPTIONS, ignoreDateFormat: true }
+    );
+    expect(withDateOption.mismatchCount).toBe(0);
   });
 });
