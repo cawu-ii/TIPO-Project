@@ -9,7 +9,6 @@ import { UploadZone } from "@/components/dashboard/upload-zone";
 import { ResultsPanel } from "@/components/dashboard/results-panel";
 import { CaseDetailDialog } from "@/components/dashboard/case-detail-dialog";
 import { HistoryTab } from "@/components/dashboard/history-tab";
-import { FieldSelector } from "@/components/dashboard/field-selector";
 import { ComparisonStats } from "@/components/dashboard/comparison-stats";
 import { ComparisonPanel } from "@/components/dashboard/comparison-panel";
 import { ComparisonDetailDialog } from "@/components/dashboard/comparison-detail-dialog";
@@ -322,9 +321,8 @@ export default function Page() {
               <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-ink-muted">04 欄位比對</p>
               <h2 className="mb-1 font-display text-base font-semibold text-ink">Excel 內部資料 vs. 智慧局最新資料</h2>
               <p className="mb-3 text-xs text-ink-muted">
-                沿用「上傳比對」頁籤抓回的同一批資料；勾選欄位後，系統將逐案比對 Excel 原有資料與智慧局最新回傳值是否相符。
+                沿用「上傳比對」頁籤抓回的同一批資料；比對欄位以「欄位對應」頁籤的設定為準（設為「不比對」的欄位不會出現在下方結果中），如需調整請回到「上傳比對」頁籤修改欄位對應。
               </p>
-              <FieldSelector selectedKeys={selectedGreenKeys} onChange={setSelectedGreenKeys} />
             </section>
 
             <section>

@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { detectColumns, MissingApplnoColumnError, parseRowsWithMapping } from "./parse-upload";
+import { detectColumns, formatCellDate, MissingApplnoColumnError, parseRowsWithMapping } from "./parse-upload";
+
+describe("formatCellDate", () => {
+  it("格式化為智慧局慣用的 20yy/m/d（不補零），以 UTC 取值避免時區把日期誤移一天", () => {
+    // 2026-08-21 業主回饋 1. 的實際案例：Excel 日期格式儲存格 -> 修法後應正確還原為 2001/1/19，
+    // 而不是舊版 raw:false 產生的 "1/19/01"。
+    expect(formatCellDate(new Date(Date.UTC(2001, 0, 19)))).toBe("2001/1/19");
+  });
+
+  it("即使建構時分秒非 0，仍只取日期部分（UTC）", () => {
+    expect(formatCellDate(new Date(Date.UTC(2026, 7, 21, 23, 59, 59)))).toBe("2026/8/21");
+  });
+});
 
 describe("detectColumns", () => {
   it("依欄位字母（A/B/C…）標出每一欄，並保留該欄第一列實際文字", () => {
@@ -78,5 +90,14 @@ describe("parseRowsWithMapping", () => {
     const result = parseRowsWithMapping([["FN"]], { applno: "A" });
     expect(result.applnos).toEqual([]);
     expect(result.internalByApplno.size).toBe(0);
+  });
+
+  it("2026-08-21 業主回饋 3.：解析時會正規化申請案號碼數（8碼補0、10碼西元年轉民國年）", () => {
+    const rows = [["FN"], ["91123456"], ["2021012522"]];
+    const result = parseRowsWithMapping(rows, { applno: "A" });
+    expect(result.applnos).toEqual(["091123456", "110012522"]);
+    // internalByApplno 的 key 也要用正規化後的案號，才能跟 API 回傳的案號對上
+    expect(result.internalByApplno.has("091123456")).toBe(true);
+    expect(result.internalByApplno.has("110012522")).toBe(true);
   });
 });

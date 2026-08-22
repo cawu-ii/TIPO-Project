@@ -13,6 +13,7 @@
  */
 import * as XLSX from "xlsx";
 import { GREEN_FIELD_DEFS } from "./field-compare";
+import { normalizeApplno } from "./patent-logic";
 import type { GreenFields } from "./mock-data";
 
 const APPLNO_HEADER_ALIASES = ["申請號", "申請案號", "applno", "案號"];
@@ -108,8 +109,10 @@ export function parseRowsWithMapping(rawRows: unknown[][], columnMapping: Column
 
   for (const row of dataRows) {
     const applnoRaw = row[applnoIndex];
-    const applno = applnoRaw === null || applnoRaw === undefined ? "" : String(applnoRaw).trim();
-    if (!applno) continue;
+    const rawApplno = applnoRaw === null || applnoRaw === undefined ? "" : String(applnoRaw).trim();
+    if (!rawApplno) continue;
+    // 2026-08-21 業主回饋 3.：8 碼補 0 湊 9 碼、10 碼西元年轉民國年，見 lib/patent-logic.ts。
+    const applno = normalizeApplno(rawApplno);
     applnos.push(applno);
 
     const green: GreenFields = { ...BLANK_GREEN };
@@ -124,14 +127,35 @@ export function parseRowsWithMapping(rawRows: unknown[][], columnMapping: Column
   return { applnos, internalByApplno };
 }
 
+/**
+ * 2026-08-21 業主回饋 1.：日期欄位讀出來變成「年份在最後且少掉 20」的怪格式。
+ * 根因：SheetJS 在 `raw:false` 模式下，是照儲存格 numFmt 代碼字面（例如 "mm-dd-yy"）
+ * 做 locale-blind 的文字轉換，不是照 Excel 實際顯示（隨作業系統地區設定）的樣子轉，
+ * 兩者可能完全不同。改用 `cellDates:true` + `raw:true` 讓 SheetJS 直接回傳真正的 JS
+ * Date 物件，我們自己格式化為智慧局慣用的「20yy/m/d」（不補零），徹底避開文字轉換的
+ * locale 歧義。SheetJS 以 UTC 建構這類 Date，所以要用 getUTC* 取值，避免時區把日期誤移一天。
+ */
+export function formatCellDate(date: Date): string {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  const d = date.getUTCDate();
+  return `${y}/${m}/${d}`;
+}
+
+function normalizeCellValue(raw: unknown): unknown {
+  if (raw instanceof Date) return formatCellDate(raw);
+  return raw;
+}
+
 async function readRawRows(file: File): Promise<unknown[][]> {
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array" });
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) return [];
   const sheet = workbook.Sheets[firstSheetName];
   if (!sheet) return [];
-  return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: false });
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
+  return rows.map((row) => row.map(normalizeCellValue));
 }
 
 /** 瀏覽器端：讀取使用者選取的 .xlsx File，偵測欄位字母／內容與預先猜測的對應（不解析資料列）。 */

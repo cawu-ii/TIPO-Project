@@ -2,9 +2,37 @@ import { describe, expect, it } from "vitest";
 import {
   addMonthsUtc,
   evaluatePatentStatus,
+  normalizeApplno,
   parseApplClass,
   formatDate,
 } from "./patent-logic";
+
+describe("normalizeApplno", () => {
+  it("8 碼補一個前導 0 湊成 9 碼", () => {
+    expect(normalizeApplno("91123456")).toBe("091123456");
+  });
+
+  it("10 碼西元年（前 4 碼）轉為民國年，湊成 9 碼", () => {
+    // 2026-08-21 業主範例確認後的正確版本：西元 2021 年 = 民國 110 年
+    expect(normalizeApplno("2021012522")).toBe("110012522");
+  });
+
+  it("已是 9 碼時原樣回傳", () => {
+    expect(normalizeApplno("110012522")).toBe("110012522");
+  });
+
+  it("含英文字母後綴的舊格式案號不強行轉換", () => {
+    expect(normalizeApplno("092133326N01")).toBe("092133326N01");
+  });
+
+  it("10 碼但換算民國年不合理（西元年早於 1912）時原樣保留，避免轉壞查詢用的案號", () => {
+    expect(normalizeApplno("1899012522")).toBe("1899012522");
+  });
+
+  it("前後有空白時先 trim 再判斷碼數", () => {
+    expect(normalizeApplno("  91123456  ")).toBe("091123456");
+  });
+});
 
 const d = (s: string) => new Date(s + "T00:00:00Z");
 

@@ -33,6 +33,36 @@ export function parseApplClass(applno: string): ApplClass | null {
   return null;
 }
 
+/**
+ * 正規化申請案號的碼數（2026-08-21 業主回饋 3.）：
+ *   - 8 碼 -> 補一個前導 0 湊成 9 碼（民國 99 年以前申請案，頭三碼民國年不足三碼時
+ *     Excel 常見只存 8 碼）。
+ *   - 10 碼且前 4 碼可解讀為西元年 -> 轉換為民國年（西元年 - 1911），與後 6 碼組成 9 碼，
+ *     即智慧局實際留存的申請號格式（例如 2021012522 -> 110012522）。
+ *     業主原提供的範例（2011012522 -> 110012522）經確認為筆誤，
+ *     正確西元年應為 2021（已與業主確認）。
+ *   - 其餘長度／非純數字（例如舊格式含英文字母後綴的案號）原樣回傳，不強行轉換，
+ *     避免把查詢用的 applno 轉壞。
+ */
+export function normalizeApplno(raw: string): string {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return trimmed;
+
+  if (trimmed.length === 8) {
+    return `0${trimmed}`;
+  }
+
+  if (trimmed.length === 10) {
+    const adYear = Number(trimmed.slice(0, 4));
+    const rocYear = adYear - 1911;
+    if (rocYear >= 1 && rocYear <= 999) {
+      return `${String(rocYear).padStart(3, "0")}${trimmed.slice(4)}`;
+    }
+  }
+
+  return trimmed;
+}
+
 export type PatentStatus =
   | "案件存續"
   | "案件逾期但尚在補繳期內"
