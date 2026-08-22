@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPatentPubUrl,
   buildPatentRightsUrl,
   decodeReasonCode,
   extractPatentContents,
+  extractPatentPubContents,
   formatNoteCount,
   groupApplnosByClass,
   mapPatentContentToRow,
+  mapPatentPubContentToRow,
   parseSlashDateOrNull,
   type TipoApiEnvelope,
 } from "./tipo-api";
@@ -220,6 +223,118 @@ describe("parseSlashDateOrNull", () => {
     expect(parseSlashDateOrNull("")).toBe(null);
     expect(parseSlashDateOrNull(null)).toBe(null);
     expect(parseSlashDateOrNull("not-a-date")).toBe(null);
+  });
+});
+
+describe("buildPatentPubUrl", () => {
+  it("組出正確的查詢參數，不需 applclass（見官方文件表 40）", () => {
+    const url = buildPatentPubUrl({ applnos: ["111142934"], tk: "TESTTOKEN" });
+    expect(url).toContain("https://cloud.tipo.gov.tw/S220/opdataapi/api/PatentPub?");
+    expect(url).toContain("format=json");
+    expect(url).toContain("applno=111142934");
+    expect(url).toContain("tk=TESTTOKEN");
+    expect(url).not.toContain("applclass");
+  });
+});
+
+// fixture 取自官方文件表 43（發明公開案-JSON 格式範例，第 71~72 頁）
+const PATENT_PUB_ENVELOPE: TipoApiEnvelope = {
+  version: "1.0",
+  status: "ok",
+  message: "",
+  "total-count": 3816,
+  "tw-patent-pub": {
+    "-page-count": 1,
+    "-create-date": "2023/06/02",
+    patentcontent: {
+      "-sequence": 1,
+      "publication-reference": {
+        "notice-no": 201500001,
+        "notice-volno": 13,
+        "notice-isuno": 1,
+        "notice-date": "2015/01/01",
+      },
+      "application-reference": {
+        "appl-no": "102122330",
+        "appl-date": "2013/06/24",
+        "first-date": "2013/06/24",
+        "foreign-language": null,
+      },
+      "patent-title": {
+        "patent-name-chinese": "一種可供植栽後盆菜保鮮維生之植栽方法及其容器",
+        "patent-name-english": null,
+      },
+      parties: {
+        applicants: [
+          {
+            "-sequence": 1,
+            "chinese-name": "華楙生技股份有限公司",
+            "english-name": null,
+            address: "桃園市蘆竹區蘆興街 93 號",
+            "english-country": "TW",
+            "chinese-country": "中華民國",
+            "english-address": null,
+          },
+        ],
+        inventors: [
+          {
+            "-sequence": 1,
+            "chinese-name": "宋家嚴",
+            "english-name": null,
+            "english-country": "TW",
+            "chinese-country": "中華民國",
+          },
+        ],
+        agents: [
+          {
+            "-sequence": 1,
+            "chinese-name": "洪振雄",
+            "english-name": "HORNG, JENN SHYONG",
+            address: "新北市新莊區昌隆街 88 號 4 樓",
+            "english-country": "TW",
+            "chinese-country": "中華民國",
+          },
+        ],
+      },
+    },
+  },
+};
+
+describe("extractPatentPubContents", () => {
+  it("找出 tw-patent-pub 包裹欄位，單筆物件正規化為陣列", () => {
+    const items = extractPatentPubContents(PATENT_PUB_ENVELOPE);
+    expect(items).toHaveLength(1);
+    expect((items[0]?.["application-reference"] as Record<string, unknown>)["appl-no"]).toBe("102122330");
+  });
+
+  it("查無資料時回傳空陣列", () => {
+    expect(extractPatentPubContents({ status: "ok" })).toEqual([]);
+  });
+});
+
+describe("mapPatentPubContentToRow — 以官方文件表 43 範例 JSON 為 fixture", () => {
+  const [item] = extractPatentPubContents(PATENT_PUB_ENVELOPE);
+  if (!item) throw new Error("fixture 缺少 patentcontent");
+  const row = mapPatentPubContentToRow(item);
+
+  it("正確映射可取得的書目欄位", () => {
+    expect(row.applno).toBe("102122330");
+    expect(row.green.applDate).toBe("2013/06/24");
+    expect(row.green.publicationNo).toBe("201500001");
+    expect(row.green.publicationDate).toBe("2015/01/01");
+    expect(row.green.patentNameZh).toBe("一種可供植栽後盆菜保鮮維生之植栽方法及其容器");
+    expect(row.green.applicantNameZh).toBe("華楙生技股份有限公司");
+    expect(row.green.agentName).toBe("洪振雄");
+    expect(row.green.inventorNameZh).toBe("宋家嚴");
+  });
+
+  it("2026-08-21 業主回饋 5.：沒有 patent-right 物件，patentEdate/chargeExpirDate 一律為 null，證書號/公告號等欄位留空", () => {
+    expect(row.patentEdate).toBe(null);
+    expect(row.chargeExpirDate).toBe(null);
+    expect(row.green.certNo).toBe("");
+    expect(row.green.gazetteNo).toBe("");
+    expect(row.yellow.licenseNote).toBe("無");
+    expect(row.yellow.chargeExpirDateLabel).toBe("");
   });
 });
 

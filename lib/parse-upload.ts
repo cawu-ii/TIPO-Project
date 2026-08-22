@@ -169,3 +169,22 @@ export async function parseUploadedExcelFile(file: File, columnMapping: ColumnMa
   const rawRows = await readRawRows(file);
   return parseRowsWithMapping(rawRows, columnMapping);
 }
+
+export interface OriginalWorkbookRows {
+  /** 原始檔案的標題列（第一列），已套用同一套日期格式化，保留原始欄位順序。 */
+  headerRow: unknown[];
+  /** 標題列以外的所有資料列，保留原始上傳順序（見 CLAUDE.md：不可更動 applno 上傳順序）。 */
+  dataRows: unknown[][];
+}
+
+/**
+ * 瀏覽器端：重新讀取使用者上傳的原始 Excel 全部欄位（不只是欄位對應表指到的 13 個綠底欄位），
+ * 供「匯出標註報表」（2026-08-21 業主回饋 4.）在原始版面旁邊插入新欄位使用。
+ * 直接重用 readRawRows()，確保日期解析邏輯（見上方 formatCellDate 註解）與批次查詢用的解析
+ * 完全一致，不會出現「查詢用的申請案號」與「匯出時讀到的申請案號」不同的情況。
+ */
+export async function readOriginalWorkbookRows(file: File): Promise<OriginalWorkbookRows> {
+  const rawRows = await readRawRows(file);
+  const [headerRow, ...dataRows] = rawRows;
+  return { headerRow: headerRow ?? [], dataRows };
+}

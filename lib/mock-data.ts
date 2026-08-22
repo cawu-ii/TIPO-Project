@@ -44,8 +44,9 @@ export interface RawPatentRow {
   applno: string;
   patentName: string;
   applicant: string;
-  chargeExpirDate: Date;
-  patentEdate: Date;
+  /** 2026-08-21 業主回饋 5.：PatentPub 來源（尚未核准，僅公開）的案件沒有這兩個欄位，為 null。 */
+  chargeExpirDate: Date | null;
+  patentEdate: Date | null;
   /** Excel 上傳資料中的綠底欄位原始值（使用者內部系統既有資料）。 */
   internal: GreenFields;
   /** 智慧局最新回傳的綠底欄位值（可能與 internal 有落差，需比對）。 */
@@ -461,10 +462,12 @@ export function buildMockRows(today: Date = new Date()): PatentRow[] {
   return buildRawRows(today).map((row) => ({
     ...row,
     applClass: parseApplClass(row.applno),
+    // buildRawRows() 一律填入非 null 的日期（示範資料無 PatentPub-only 情境），
+    // 非 null 斷言僅用於滿足型別（RawPatentRow 因真實 API 可能為 null 而放寬）。
     status: evaluatePatentStatus({
       today,
-      patentEdate: row.patentEdate,
-      chargeExpirDate: row.chargeExpirDate,
+      patentEdate: row.patentEdate!,
+      chargeExpirDate: row.chargeExpirDate!,
     }),
   }));
 }

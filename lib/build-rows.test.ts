@@ -103,8 +103,8 @@ describe("buildRowsFromApi", () => {
     expect(rows[0]?.tipo.applicantNameEn).toBe("SAMTEC, LLC.");
   });
 
-  it("缺少關鍵日期時視為查無資料", () => {
-    const tipoByApplno = new Map([["102222085", makeTipoRow({ patentEdate: null })]]);
+  it("完全查無此案號的申請案號進入 notFound（tipoByApplno 裡沒有這筆）", () => {
+    const tipoByApplno = new Map<string, TipoMappedRow>();
     const { rows, notFound } = buildRowsFromApi({
       applnos: ["102222085"],
       internalByApplno: new Map(),
@@ -113,5 +113,24 @@ describe("buildRowsFromApi", () => {
     });
     expect(rows).toEqual([]);
     expect(notFound).toEqual(["102222085"]);
+  });
+
+  it("2026-08-21 業主回饋 5.：缺少專利權止日／年費有效日期（PatentPub fallback 來源）時，" +
+    "標記為「尚未核准（僅公開）」，不進 notFound（因為確實查到公開資料，只是還沒核准）", () => {
+    const tipoByApplno = new Map([
+      ["102222085", makeTipoRow({ patentEdate: null, chargeExpirDate: null })],
+    ]);
+    const { rows, notFound } = buildRowsFromApi({
+      applnos: ["102222085"],
+      internalByApplno: new Map(),
+      tipoByApplno,
+      today,
+    });
+    expect(notFound).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("尚未核准（僅公開）");
+    expect(rows[0]?.patentEdate).toBe(null);
+    expect(rows[0]?.chargeExpirDate).toBe(null);
+    expect(rows[0]?.tipo.patentNameZh).toBe("具有防轉元件與減低焊料流動的接觸器");
   });
 });

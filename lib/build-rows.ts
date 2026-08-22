@@ -47,11 +47,31 @@ export function buildRowsFromApi({
 
   for (const applno of applnos) {
     const tipo = tipoByApplno.get(applno);
-    if (!tipo || !tipo.patentEdate || !tipo.chargeExpirDate) {
+    if (!tipo) {
       notFound.push(applno);
       continue;
     }
     const internal = internalByApplno.get(applno) ?? BLANK_GREEN;
+
+    // 2026-08-21 業主回饋 5.：PatentRights 查無資料、改用 PatentPub fallback 查到的案件
+    // 沒有專利權止日／年費有效日期，無法套用四階判定，獨立標記為「尚未核准（僅公開）」，
+    // 而不是當成查無資料（因為確實有查到公開資料，只是還沒核准）。
+    if (!tipo.patentEdate || !tipo.chargeExpirDate) {
+      rows.push({
+        applno,
+        patentName: tipo.green.patentNameZh || internal.patentNameZh || "",
+        applicant: tipo.green.applicantNameEn || internal.applicantNameEn || "",
+        chargeExpirDate: null,
+        patentEdate: null,
+        internal,
+        tipo: tipo.green,
+        tipoYellow: tipo.yellow,
+        applClass: parseApplClass(applno),
+        status: "尚未核准（僅公開）",
+      });
+      continue;
+    }
+
     const status = evaluatePatentStatus({
       today,
       patentEdate: tipo.patentEdate,

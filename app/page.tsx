@@ -23,6 +23,7 @@ import {
   RECOMMENDED_NORMALIZATION_OPTIONS,
 } from "@/lib/field-compare";
 import { downloadTemplate, exportAnalysisReport, exportComparisonReport, exportTipoRawData } from "@/lib/excel";
+import { exportAnnotatedOriginalReport } from "@/lib/excel-annotated";
 import {
   detectExcelColumns,
   parseUploadedExcelFile,
@@ -242,6 +243,16 @@ export default function Page() {
     exportTipoRawData(rows);
   }
 
+  // 2026-08-21 業主回饋 4.：在原始 Excel 版面旁邊新增欄位，標註「正確」或紅字顯示智慧局正確值。
+  async function handleExportAnnotated() {
+    if (!rows || !file) return;
+    try {
+      await exportAnnotatedOriginalReport(file, columnMapping, rows, selectedGreenKeys, normalizationOptions);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "匯出標註報表時發生未知錯誤");
+    }
+  }
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
@@ -343,6 +354,7 @@ export default function Page() {
                 onViewDetail={setComparisonDetailRow}
                 onExportDiff={handleExportComparisonDiff}
                 onExportRawData={handleExportTipoRawData}
+                onExportAnnotated={handleExportAnnotated}
               />
             </section>
           </div>

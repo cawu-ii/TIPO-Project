@@ -13,6 +13,12 @@ import { parseApplClass } from "./patent-logic";
 import type { GreenFields, YellowFields } from "./mock-data";
 
 export const TIPO_PATENT_RIGHTS_URL = "https://cloud.tipo.gov.tw/S220/opdataapi/api/PatentRights";
+/**
+ * 發明公開案 PatentPub（官方文件第 65~68 頁）—— 2026-08-21 業主回饋 5.：
+ * PatentRights 查無資料時的 fallback，可查到「已公開但尚未核准」的發明專利申請案。
+ * 與 PatentRights 不同，查詢參數不需要 applclass（文件表 40 未列出此參數）。
+ */
+export const TIPO_PATENT_PUB_URL = "https://cloud.tipo.gov.tw/S220/opdataapi/api/PatentPub";
 
 export type ApplClass = 1 | 2 | 3;
 
@@ -83,6 +89,16 @@ export function buildPatentRightsUrl({
   return `${TIPO_PATENT_RIGHTS_URL}?${params.toString()}`;
 }
 
+/** 組出 PatentPub 查詢 URL（不需 applclass，見官方文件表 40）。 */
+export function buildPatentPubUrl({ applnos, tk }: { applnos: string[]; tk: string }): string {
+  const params = new URLSearchParams();
+  params.set("format", "json");
+  params.set("applno", applnos.join("|"));
+  params.set("top", String(Math.min(Math.max(applnos.length, 1), 5000)));
+  params.set("tk", tk);
+  return `${TIPO_PATENT_PUB_URL}?${params.toString()}`;
+}
+
 export interface TipoApiEnvelope {
   version?: string;
   status?: "ok" | "sample" | "error" | string;
@@ -97,6 +113,16 @@ export interface TipoApiEnvelope {
  */
 export function extractPatentContents(response: TipoApiEnvelope): Record<string, unknown>[] {
   const wrapperKey = Object.keys(response).find((k) => /^tw-patent-rights/i.test(k));
+  if (!wrapperKey) return [];
+  const wrapper = response[wrapperKey] as Record<string, unknown> | undefined;
+  const content = wrapper?.["patentcontent"];
+  if (!content) return [];
+  return Array.isArray(content) ? (content as Record<string, unknown>[]) : [content as Record<string, unknown>];
+}
+
+/** 從回應中找出 tw-patent-pub 包裹欄位並取出 patentcontent 陣列，邏輯同 extractPatentContents。 */
+export function extractPatentPubContents(response: TipoApiEnvelope): Record<string, unknown>[] {
+  const wrapperKey = Object.keys(response).find((k) => /^tw-patent-pub/i.test(k));
   if (!wrapperKey) return [];
   const wrapper = response[wrapperKey] as Record<string, unknown> | undefined;
   const content = wrapper?.["patentcontent"];
@@ -200,5 +226,65 @@ export function mapPatentContentToRow(item: Record<string, unknown>): TipoMapped
     chargeExpirDate,
     green,
     yellow,
+  };
+}
+
+const BLANK_YELLOW: YellowFields = {
+  licenseNote: "無",
+  pledgeNote: "無",
+  transferNote: "無",
+  inheritNote: "無",
+  trustNote: "無",
+  opposeNote: "無",
+  invalidateNote: "無",
+  extinguishDate: "",
+  extinguishReason: "",
+  revokeDate: "",
+  revokeReason: "",
+  patentStartDate: "",
+  patentEndDate: "",
+  chargeExpirDateLabel: "",
+  chargeExpirYear: "",
+};
+
+/**
+ * 將 PatentPub（發明公開案）API 單筆 patentcontent 映射為 TipoMappedRow —— 2026-08-21 業主
+ * 回饋 5.：PatentRights 查無資料時的 fallback。與 mapPatentContentToRow() 的關鍵差異：
+ * PatentPub 只有「已公開但尚未核准」的書目資料，沒有 patent-right 物件，因此沒有「專利權止日」
+ * 「年費有效日期」等核准後才會產生的欄位 —— patentEdate/chargeExpirDate 一律為 null，
+ * lib/patent-logic.ts 既有的四階狀態判定邏輯無法套用，呼叫端（lib/build-rows.ts）需改判定為
+ * 「尚未核准（僅公開）」這個獨立狀態，而不是當成查無資料。
+ */
+export function mapPatentPubContentToRow(item: Record<string, unknown>): TipoMappedRow {
+  const pub = (item["publication-reference"] ?? {}) as Record<string, unknown>;
+  const appl = (item["application-reference"] ?? {}) as Record<string, unknown>;
+  const title = (item["patent-title"] ?? {}) as Record<string, unknown>;
+  const parties = (item["parties"] ?? {}) as Record<string, unknown>;
+
+  const applicants = parties["applicants"];
+  const applicantAddress = joinPersons(applicants, "english-address") || joinPersons(applicants, "address");
+
+  const green: GreenFields = {
+    applDate: str(appl["appl-date"]),
+    publicationNo: str(pub["notice-no"]),
+    publicationDate: str(pub["notice-date"]),
+    gazetteNo: "",
+    gazetteDate: "",
+    certNo: "",
+    patentNameZh: str(title["patent-name-chinese"]),
+    agentName: joinPersons(parties["agents"], "chinese-name"),
+    applicantNameZh: joinPersons(applicants, "chinese-name"),
+    applicantNameEn: joinPersons(applicants, "english-name"),
+    applicantAddress,
+    inventorNameZh: joinPersons(parties["inventors"], "chinese-name"),
+    inventorNameEn: joinPersons(parties["inventors"], "english-name", true),
+  };
+
+  return {
+    applno: str(appl["appl-no"]),
+    patentEdate: null,
+    chargeExpirDate: null,
+    green,
+    yellow: { ...BLANK_YELLOW },
   };
 }

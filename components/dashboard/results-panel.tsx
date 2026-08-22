@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { DateRuler } from "@/components/date-ruler";
-import { formatDate, type PatentStatus } from "@/lib/patent-logic";
+import { formatDateOrDash, type PatentStatus } from "@/lib/patent-logic";
 import type { PatentRow } from "@/lib/mock-data";
 
 const STATUS_OPTIONS: Array<{ value: "all" | PatentStatus; label: string }> = [
@@ -16,6 +16,8 @@ const STATUS_OPTIONS: Array<{ value: "all" | PatentStatus; label: string }> = [
   { value: "案件逾期但尚在補繳期內", label: "逾期但尚在補繳期內" },
   { value: "案件逾補繳期但尚可復權", label: "逾補繳期但尚可復權" },
   { value: "案件已消滅", label: "案件已消滅" },
+  // 2026-08-21 業主回饋 5.：PatentPub fallback 來源、尚未核准的案件。
+  { value: "尚未核准（僅公開）", label: "尚未核准（僅公開）" },
 ];
 
 export function ResultsPanel({
@@ -98,19 +100,21 @@ export function ResultsPanel({
                 <TableCell className="max-w-[220px] truncate">{row.patentName}</TableCell>
                 <TableCell className="max-w-[160px] truncate text-ink-muted">{row.applicant}</TableCell>
                 <TableCell className="whitespace-nowrap font-mono text-xs tabular">
-                  {formatDate(row.chargeExpirDate)}
+                  {formatDateOrDash(row.chargeExpirDate)}
                 </TableCell>
                 <TableCell className="whitespace-nowrap font-mono text-xs tabular">
-                  {formatDate(row.patentEdate)}
+                  {formatDateOrDash(row.patentEdate)}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={row.status} />
-                    <DateRuler
-                      compact
-                      input={{ today, patentEdate: row.patentEdate, chargeExpirDate: row.chargeExpirDate }}
-                      className="hidden md:flex"
-                    />
+                    {row.patentEdate && row.chargeExpirDate ? (
+                      <DateRuler
+                        compact
+                        input={{ today, patentEdate: row.patentEdate, chargeExpirDate: row.chargeExpirDate }}
+                        className="hidden md:flex"
+                      />
+                    ) : null}
                   </div>
                 </TableCell>
                 <TableCell className="text-right">

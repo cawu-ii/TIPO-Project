@@ -2,10 +2,28 @@ import { describe, expect, it } from "vitest";
 import {
   addMonthsUtc,
   evaluatePatentStatus,
+  formatDateOrDash,
   normalizeApplno,
   parseApplClass,
   formatDate,
+  STATUS_TONE,
 } from "./patent-logic";
+
+describe("formatDateOrDash", () => {
+  it("Date 物件時等同 formatDate", () => {
+    expect(formatDateOrDash(new Date("2026-08-21T00:00:00Z"))).toBe(formatDate(new Date("2026-08-21T00:00:00Z")));
+  });
+
+  it("2026-08-21 業主回饋 5.：null（PatentPub 來源、無專利權止日／年費資料）時顯示為 —", () => {
+    expect(formatDateOrDash(null)).toBe("—");
+  });
+});
+
+describe("STATUS_TONE", () => {
+  it("涵蓋新增的「尚未核准（僅公開）」狀態", () => {
+    expect(STATUS_TONE["尚未核准（僅公開）"]).toBe("neutral");
+  });
+});
 
 describe("normalizeApplno", () => {
   it("8 碼補一個前導 0 湊成 9 碼", () => {

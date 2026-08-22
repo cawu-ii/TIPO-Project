@@ -67,13 +67,20 @@ export type PatentStatus =
   | "案件存續"
   | "案件逾期但尚在補繳期內"
   | "案件逾補繳期但尚可復權"
-  | "案件已消滅";
+  | "案件已消滅"
+  /**
+   * 2026-08-21 業主回饋 5.：PatentRights 查無資料、改用 PatentPub（發明公開案）查到的
+   * 案件——這類案件根本還沒核准，沒有「專利權止日」「年費有效日期」，既有四階判定邏輯
+   * 無套用的基礎，因此獨立為一個狀態，不硬套進存續／逾期／消滅任何一種。
+   */
+  | "尚未核准（僅公開）";
 
-export const STATUS_TONE: Record<PatentStatus, "alive" | "grace" | "revival" | "dead"> = {
+export const STATUS_TONE: Record<PatentStatus, "alive" | "grace" | "revival" | "dead" | "neutral"> = {
   案件存續: "alive",
   案件逾期但尚在補繳期內: "grace",
   案件逾補繳期但尚可復權: "revival",
   案件已消滅: "dead",
+  "尚未核准（僅公開）": "neutral",
 };
 
 export interface EvaluatePatentStatusInput {
@@ -170,4 +177,13 @@ export function formatDate(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}/${m}/${d}`;
+}
+
+/**
+ * 2026-08-21 業主回饋 5.：PatentPub 來源的案件沒有專利權止日／年費有效日期，
+ * 這兩個欄位在 PatentRow 上會是 null——UI／匯出報表顯示日期時一律改用這個函式，
+ * 避免直接呼叫 formatDate(null) 噴錯。
+ */
+export function formatDateOrDash(date: Date | null): string {
+  return date ? formatDate(date) : "—";
 }

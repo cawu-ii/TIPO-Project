@@ -16,6 +16,7 @@ export function ComparisonPanel({
   onViewDetail,
   onExportDiff,
   onExportRawData,
+  onExportAnnotated,
 }: {
   rows: PatentRow[] | null;
   results: CaseComparisonResult[];
@@ -23,6 +24,8 @@ export function ComparisonPanel({
   onViewDetail: (row: PatentRow) => void;
   onExportDiff: () => void;
   onExportRawData: () => void;
+  /** 2026-08-21 業主回饋 4.：匯出「原始 Excel 版面 + 紅字標記正確值」的標註報表。 */
+  onExportAnnotated: () => void;
 }) {
   const [query, setQuery] = React.useState("");
 
@@ -54,6 +57,14 @@ export function ComparisonPanel({
         </div>
         <Button variant="outline" size="sm" onClick={onExportRawData} disabled={!rows || rows.length === 0}>
           <FileSpreadsheet className="h-4 w-4" /> 匯出智慧局完整資料 (.xlsx)
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onExportAnnotated}
+          disabled={!rows || rows.length === 0 || selectedKeys.size === 0}
+        >
+          <FileDown className="h-4 w-4" /> 匯出標註報表（原檔 + 紅字標記）
         </Button>
         <Button variant="primary" size="sm" onClick={onExportDiff} disabled={!rows || rows.length === 0}>
           <FileDown className="h-4 w-4" /> 匯出比對差異報告 (.xlsx)

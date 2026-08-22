@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { formatDate, APPL_CLASS_LABEL } from "./patent-logic";
+import { formatDate, formatDateOrDash, APPL_CLASS_LABEL } from "./patent-logic";
 import {
   buildCaseComparison,
   DEFAULT_NORMALIZATION_OPTIONS,
@@ -31,8 +31,8 @@ export function exportAnalysisReport(rows: PatentRow[]) {
     專利類別: row.applClass ? APPL_CLASS_LABEL[row.applClass] : "無法判定",
     專利名稱: row.patentName,
     專利權人: row.applicant,
-    年費有效日期: formatDate(row.chargeExpirDate),
-    專利權止日: formatDate(row.patentEdate),
+    年費有效日期: formatDateOrDash(row.chargeExpirDate),
+    專利權止日: formatDateOrDash(row.patentEdate),
     系統判定狀態: row.status,
     最後比對時間: `${formatDate(now)} ${now.getHours().toString().padStart(2, "0")}:${now
       .getMinutes()

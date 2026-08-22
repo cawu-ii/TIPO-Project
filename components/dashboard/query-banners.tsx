@@ -7,7 +7,8 @@ export interface GroupErrorInfo {
   message: string;
 }
 
-const APPL_CLASS_LABEL: Record<number, string> = { 1: "發明", 2: "新型", 3: "設計" };
+// applclass 0 為 PatentPub（發明公開案）fallback 查詢的錯誤標記，不對應實際專利類別。
+const APPL_CLASS_LABEL: Record<number, string> = { 0: "PatentPub 補查", 1: "發明", 2: "新型", 3: "設計" };
 
 export function QueryBanners({
   parseError,
