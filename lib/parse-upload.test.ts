@@ -32,8 +32,8 @@ describe("detectColumns", () => {
     expect(guessedMapping.applicantNameEn).toBe("C");
   });
 
-  it("標題是外國案件常見縮寫（例如 FN）時，猜不到就留空，不強行硬猜", () => {
-    const rawRows = [["FN", "Applicant"]];
+  it("標題是無法辨識的縮寫（例如 FN、XYZ）時，猜不到就留空，不強行硬猜", () => {
+    const rawRows = [["FN", "XYZ Code"]];
     const { guessedMapping } = detectColumns(rawRows);
     expect(guessedMapping.applno).toBeUndefined();
     expect(Object.keys(guessedMapping)).toHaveLength(0);
@@ -42,6 +42,41 @@ describe("detectColumns", () => {
   it("接受「applno」或「申請案號」作為 applno 別名標題", () => {
     expect(detectColumns([["applno"]]).guessedMapping.applno).toBe("A");
     expect(detectColumns([["申請案號"]]).guessedMapping.applno).toBe("A");
+  });
+
+  it("2026-08-22 業主回饋：常見完整英文專利欄位標題（非縮寫）也能自動猜出對應，不限中文標題", () => {
+    const rawRows = [
+      [
+        "Case Ref.",
+        "Filing Date",
+        "Filing Number",
+        "Publication Date",
+        "Publication Number",
+        "Grant Date",
+        "Grant Number",
+        "Registered Owner Name",
+        "Registered Owner Address",
+      ],
+    ];
+    const { guessedMapping } = detectColumns(rawRows);
+    expect(guessedMapping.applno).toBe("C"); // Filing Number
+    expect(guessedMapping.applDate).toBe("B"); // Filing Date
+    expect(guessedMapping.publicationDate).toBe("D");
+    expect(guessedMapping.publicationNo).toBe("E");
+    expect(guessedMapping.gazetteDate).toBe("F"); // Grant Date
+    expect(guessedMapping.certNo).toBe("G"); // Grant Number
+    expect(guessedMapping.applicantNameEn).toBe("H"); // Registered Owner Name
+    expect(guessedMapping.applicantAddress).toBe("I"); // Registered Owner Address
+    // "Case Ref." 沒有對應別名，不會被誤猜成任何欄位
+    expect(Object.values(guessedMapping)).not.toContain("A");
+  });
+
+  it("英文別名比對不分大小寫、不受欄位內多餘空白影響", () => {
+    const rawRows = [["  filing number  ", "FILING DATE", "inventor name"]];
+    const { guessedMapping } = detectColumns(rawRows);
+    expect(guessedMapping.applno).toBe("A");
+    expect(guessedMapping.applDate).toBe("B");
+    expect(guessedMapping.inventorNameEn).toBe("C");
   });
 
   it("空工作表回傳空欄位清單，不拋錯", () => {

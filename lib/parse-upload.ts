@@ -9,6 +9,12 @@
  * （A/B/C…）而非標題文字為準；標題文字比對邏輯保留，但只用來做「預先猜測」的
  * 預選值，使用者可自由覆寫，不強制採用。
  *
+ * 2026-08-22 業主回饋：純英文標題的 Excel（例如國外事務所常見的 Filing Number／
+ * Publication Date／Grant Date／Registered Owner Name 這類完整英文詞彙，而非像 "FN"
+ * 那種猜不到的縮寫）目前完全猜不到，體感不夠智慧。因此擴充別名清單納入常見英文
+ * 專利欄位用語 —— 這仍然只是「預先猜測」的便利機制，猜錯或猜不到使用者都能自行
+ * 於下拉選單覆寫，不影響「以欄位字母為準」的核心設計。
+ *
  * 純解析邏輯（detectColumns / parseRowsWithMapping）與瀏覽器 File API 解耦，方便單元測試。
  */
 import * as XLSX from "xlsx";
@@ -16,7 +22,35 @@ import { GREEN_FIELD_DEFS } from "./field-compare";
 import { normalizeApplno } from "./patent-logic";
 import type { GreenFields } from "./mock-data";
 
-const APPLNO_HEADER_ALIASES = ["申請號", "申請案號", "applno", "案號"];
+const APPLNO_HEADER_ALIASES = [
+  "申請號",
+  "申請案號",
+  "applno",
+  "案號",
+  "Filing Number",
+  "Application Number",
+  "Application No",
+  "App No",
+  "Serial Number",
+];
+
+/**
+ * 各欄位的常見英文標題別名，補充在 GREEN_FIELD_DEFS 中文標籤之外的猜測依據。
+ * 刻意避免使用過於單一／容易誤判的詞（例如單獨的 "Date"、"Number"、"Name"），
+ * 只收錄業界慣用、語意明確的完整詞彙。
+ */
+const FIELD_HEADER_ALIASES: Partial<Record<string, string[]>> = {
+  applDate: ["Filing Date", "Application Date", "Filed Date"],
+  publicationNo: ["Publication Number", "Publication No", "Pub No"],
+  publicationDate: ["Publication Date", "Pub Date"],
+  gazetteDate: ["Grant Date", "Registration Date", "Issue Date"],
+  certNo: ["Grant Number", "Patent Number", "Certificate Number", "Patent No"],
+  patentNameZh: ["Patent Title", "Invention Title", "Title"],
+  agentName: ["Agent", "Agent Name", "Attorney", "Attorney Name", "Recordal Agent"],
+  applicantNameEn: ["Applicant", "Applicant Name", "Owner", "Assignee", "Registered Owner Name"],
+  applicantAddress: ["Address", "Applicant Address", "Registered Owner Address", "Owner Address"],
+  inventorNameEn: ["Inventor", "Inventor Name", "Inventors"],
+};
 
 export type ColumnMappingKey = "applno" | (typeof GREEN_FIELD_DEFS)[number]["key"];
 
@@ -36,8 +70,14 @@ export interface DetectedColumns {
   guessedMapping: ColumnMapping;
 }
 
+/** 移除空白並轉小寫，讓英文別名比對不分大小寫／全形半形空白差異；中文字不受影響。 */
 function normalizeHeader(h: string): string {
-  return h.replace(/\s+/g, "").trim();
+  return h.replace(/\s+/g, "").trim().toLowerCase();
+}
+
+function headerMatchesAny(headerText: string, aliases: string[]): boolean {
+  const normalized = normalizeHeader(headerText);
+  return aliases.some((alias) => normalizeHeader(alias) === normalized);
 }
 
 /** 核心偵測邏輯：輸入 SheetJS「header:1」模式讀出的原始列（含標題列），與檔案 I/O 無關，方便單元測試。 */
@@ -49,11 +89,12 @@ export function detectColumns(rawRows: unknown[][]): DetectedColumns {
   }));
 
   const guessedMapping: ColumnMapping = {};
-  const applnoCol = columns.find((c) => APPLNO_HEADER_ALIASES.includes(normalizeHeader(c.headerText)));
+  const applnoCol = columns.find((c) => headerMatchesAny(c.headerText, APPLNO_HEADER_ALIASES));
   if (applnoCol) guessedMapping.applno = applnoCol.letter;
 
   for (const def of GREEN_FIELD_DEFS) {
-    const matched = columns.find((c) => normalizeHeader(c.headerText) === normalizeHeader(def.label));
+    const aliases = [def.label, ...(FIELD_HEADER_ALIASES[def.key] ?? [])];
+    const matched = columns.find((c) => headerMatchesAny(c.headerText, aliases));
     if (matched) guessedMapping[def.key as ColumnMappingKey] = matched.letter;
   }
 
