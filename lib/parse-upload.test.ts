@@ -2,14 +2,25 @@ import { describe, expect, it } from "vitest";
 import { detectColumns, formatCellDate, MissingApplnoColumnError, parseRowsWithMapping } from "./parse-upload";
 
 describe("formatCellDate", () => {
-  it("格式化為智慧局慣用的 20yy/m/d（不補零），以 UTC 取值避免時區把日期誤移一天", () => {
+  // 2026-08-24 業主回饋（差一天）：實測確認 SheetJS 的 cellDates:true 是用「本地時區」
+  // 建構 Date 物件（相當於 new Date(y,m,d)，不是 Date.UTC(y,m,d)）。這裡的測試輸入刻意
+  // 用本地建構子模擬 SheetJS 的真實行為，而不是用 Date.UTC ——用 Date.UTC 建構的輸入
+  // 沒辦法重現「正時區下 getUTC* 讀出前一天」這個實際踩到的 bug，見下方回歸測試。
+  it("格式化為智慧局慣用的 20yy/m/d（不補零）", () => {
     // 2026-08-21 業主回饋 1. 的實際案例：Excel 日期格式儲存格 -> 修法後應正確還原為 2001/1/19，
     // 而不是舊版 raw:false 產生的 "1/19/01"。
-    expect(formatCellDate(new Date(Date.UTC(2001, 0, 19)))).toBe("2001/1/19");
+    expect(formatCellDate(new Date(2001, 0, 19))).toBe("2001/1/19");
   });
 
-  it("即使建構時分秒非 0，仍只取日期部分（UTC）", () => {
-    expect(formatCellDate(new Date(Date.UTC(2026, 7, 21, 23, 59, 59)))).toBe("2026/8/21");
+  it("即使建構時分秒非 0，仍只取日期部分", () => {
+    expect(formatCellDate(new Date(2026, 7, 21, 23, 59, 59))).toBe("2026/8/21");
+  });
+
+  it("2026-08-24 業主回饋：以本地時區建構子（模擬 SheetJS 真實行為）建立的日期，用本地 get* 還原不會差一天", () => {
+    // 用業主實際上傳檔案重現過的案例：SheetJS 讀出的 Date 物件在正時區（例如台灣 UTC+8）下，
+    // 若誤用 getUTC* 取值會讀成前一天（2011/4/24 而非 2011/4/25）——此測試鎖定正確行為，
+    // 避免日後又改回 getUTC* 而重蹈覆轍。
+    expect(formatCellDate(new Date(2011, 3, 25))).toBe("2011/4/25");
   });
 });
 

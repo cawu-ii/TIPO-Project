@@ -174,12 +174,22 @@ export function parseRowsWithMapping(rawRows: unknown[][], columnMapping: Column
  * 做 locale-blind 的文字轉換，不是照 Excel 實際顯示（隨作業系統地區設定）的樣子轉，
  * 兩者可能完全不同。改用 `cellDates:true` + `raw:true` 讓 SheetJS 直接回傳真正的 JS
  * Date 物件，我們自己格式化為智慧局慣用的「20yy/m/d」（不補零），徹底避開文字轉換的
- * locale 歧義。SheetJS 以 UTC 建構這類 Date，所以要用 getUTC* 取值，避免時區把日期誤移一天。
+ * locale 歧義。
+ *
+ * 2026-08-24 業主回饋（差一天）：原先這裡用 getUTC* 取值，理由是「SheetJS 以 UTC 建構
+ * 這類 Date」——實際用業主提供的檔案＋本專案實際依賴的 xlsx 套件版本重現後發現這個假設
+ * 是錯的：SheetJS 的 `cellDates:true` 其實是用「執行環境的本地時區」建構 Date 物件
+ * （相當於 `new Date(y, m, d)`，不是 `Date.UTC(y, m, d)`）。在正時區（例如台灣 UTC+8）
+ * 下，這會讓建構出來的 Date 物件的 UTC 時間點落在前一天的 16:00，所以用 getUTC* 取值
+ * 會誤讀成前一天；反而是用本地時區的 get*（getFullYear/getMonth/getDate）才能正確
+ * 還原（因為讀取當下也是在同一個本地環境執行，寫入與讀取用同一套時區基準，天然互相
+ * 抵消，不受瀏覽器所在時區影響）。這也是先前用 TZ=America/Los_Angeles（負時區）測試
+ * 沒踩到雷的原因——負時區的本地建構不會跨到前一個 UTC 日，掩蓋了問題。
  */
 export function formatCellDate(date: Date): string {
-  const y = date.getUTCFullYear();
-  const m = date.getUTCMonth() + 1;
-  const d = date.getUTCDate();
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
   return `${y}/${m}/${d}`;
 }
 
