@@ -32,7 +32,7 @@ describe("fieldsMatch — 基本行為（沿用舊測試，預設 valueType=text
 describe("fieldsMatch — 異體字（無條件套用，不受選項控制）", () => {
   it("啓／啟視為同一字，即使所有正規化選項都關閉", () => {
     expect(fieldsMatch("閻啓泰", "閻啟泰", "text")).toBe(true);
-    expect(fieldsMatch("林景郁; 閻啓泰", "林景郁; 閻啟泰", "personList")).toBe(true);
+    expect(fieldsMatch("林景郁; 閻啓泰", "林景郁; 閻啟泰", "personListZh")).toBe(true);
   });
 });
 
@@ -53,10 +53,25 @@ describe("fieldsMatch — 六種忽略差異選項（業主提供範例）", () 
   });
 
   it("忽略多人名單排列順序：林景郁; 閻啟泰 = 閻啟泰;林景郁", () => {
-    expect(fieldsMatch("林景郁; 閻啟泰", "閻啟泰;林景郁", "personList")).toBe(false);
+    expect(fieldsMatch("林景郁; 閻啟泰", "閻啟泰;林景郁", "personListZh")).toBe(false);
     expect(
-      fieldsMatch("林景郁; 閻啟泰", "閻啟泰;林景郁", "personList", opts({ ignorePersonOrder: true }))
+      fieldsMatch("林景郁; 閻啟泰", "閻啟泰;林景郁", "personListZh", opts({ ignorePersonOrder: true }))
     ).toBe(true);
+  });
+
+  it("2026-08-28 業主回饋：中文姓名清單分隔符不一致（內部用逗號、智慧局用分號）時仍判定相符", () => {
+    // 業主實際案例（案號 114103629）：內部系統代理人欄「閻啓泰, 林景郁」（逗號分隔），
+    // 智慧局回傳「閻啓泰; 林景郁」（分號分隔）——兩人、順序都相同，只是分隔符不同，不應判定不符。
+    expect(fieldsMatch("閻啓泰, 林景郁", "閻啓泰; 林景郁", "personListZh")).toBe(true);
+    // 頓號、全形逗號也視為分隔符
+    expect(fieldsMatch("閻啓泰、林景郁", "閻啓泰; 林景郁", "personListZh")).toBe(true);
+    expect(fieldsMatch("閻啓泰，林景郁", "閻啓泰; 林景郁", "personListZh")).toBe(true);
+  });
+
+  it("英文姓名清單（LASTNAME, FIRSTNAME 格式）不可把逗號當人與人的分隔符，否則會拆散單一姓名", () => {
+    // 姓名本身「WANG, XIAOLUN」含逗號；若逗號被當成分隔符會誤拆成兩個人，導致原本相符的清單被判定不符。
+    const list = "WANG, XIAOLUN (US); MARX, MATTHEW ARNOLD (US)";
+    expect(fieldsMatch(list, list, "personList")).toBe(true);
   });
 
   it("忽略日期格式：2022/09/01 = 2022/9/1 = 20220901", () => {

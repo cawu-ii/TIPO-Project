@@ -22,9 +22,15 @@ export type FieldCategory = "green" | "yellow";
  * - text：一般文字欄位，套用大小寫／全形半形／標點正規化（依選項）
  * - date：日期欄位，只有「忽略日期格式」選項有意義
  * - patentNo：專利號類欄位（證書號），只有「忽略國別碼與橫槓」選項有意義
- * - personList：分號分隔的多人姓名欄位，額外支援「忽略排列順序」
+ * - personList：分號分隔的多人「英文」姓名欄位（LASTNAME, FIRSTNAME (US) 格式），
+ *   額外支援「忽略排列順序」。因為姓名本身就含逗號（姓,名），只能用分號辨識人與人的邊界，
+ *   不能額外把逗號當作分隔符，否則會把同一個人的姓名拆成兩截。
+ * - personListZh：分號分隔的多人「中文」姓名欄位（代理人／申請人／發明人中文姓名）。
+ *   2026-08-28 業主回饋：中文姓名清單常見用「、」或全形／半形逗號分隔多人（例如
+ *   代理人「閻啓泰, 林景郁」），但智慧局固定用分號（「閻啓泰; 林景郁」），導致明明是
+ *   同樣兩個人卻被判定不符。中文姓名本身不含逗號，所以額外把逗號、頓號也當作分隔符是安全的。
  */
-export type FieldValueType = "text" | "date" | "patentNo" | "personList";
+export type FieldValueType = "text" | "date" | "patentNo" | "personList" | "personListZh";
 
 export interface FieldDef {
   key: string;
@@ -44,11 +50,11 @@ export const GREEN_FIELD_DEFS: FieldDef[] = [
   // 把對應項目的 valueType 改成 "patentNo" 即可套用，不需改動比對邏輯本身。
   { key: "certNo", label: "證書號（專利權數號）", category: "green", valueType: "patentNo" },
   { key: "patentNameZh", label: "中文專利名稱", category: "green", valueType: "text" },
-  { key: "agentName", label: "代理人姓名", category: "green", valueType: "personList" },
-  { key: "applicantNameZh", label: "申請人中文姓名", category: "green", valueType: "personList" },
+  { key: "agentName", label: "代理人姓名", category: "green", valueType: "personListZh" },
+  { key: "applicantNameZh", label: "申請人中文姓名", category: "green", valueType: "personListZh" },
   { key: "applicantNameEn", label: "申請人英文姓名", category: "green", valueType: "personList" },
   { key: "applicantAddress", label: "申請人地址", category: "green", valueType: "text" },
-  { key: "inventorNameZh", label: "發明人中文姓名", category: "green", valueType: "personList" },
+  { key: "inventorNameZh", label: "發明人中文姓名", category: "green", valueType: "personListZh" },
   { key: "inventorNameEn", label: "發明人英文姓名", category: "green", valueType: "personList" },
 ];
 
@@ -83,7 +89,8 @@ export interface NormalizationOptions {
   ignoreWidth: boolean;
   /** 忽略標點符號與空白以外的符號差異。例：King, R. (US) = KingR(US) */
   ignorePunctuation: boolean;
-  /** 忽略多人姓名清單（以分號分隔）的排列順序。例：林景郁; 閻啟泰 = 閻啟泰; 林景郁 */
+  /** 忽略多人姓名清單的排列順序。例：林景郁; 閻啟泰 = 閻啟泰; 林景郁
+   *（中文姓名清單另外無條件把逗號、頓號也當分隔符，見 personListZh，不受此選項控制） */
   ignorePersonOrder: boolean;
   /** 忽略日期格式差異。例：2022/09/01 = 2022/9/1 = 20220901 */
   ignoreDateFormat: boolean;
@@ -149,10 +156,20 @@ function normalizeGenericText(value: string, options: NormalizationOptions): str
   return normalizeWhitespace(v);
 }
 
-/** 多人姓名清單：先逐一正規化每個姓名，「忽略排列順序」開啟時再排序後比對。 */
-function normalizePersonList(value: string, options: NormalizationOptions): string {
+/** 英文姓名清單的人與人邊界：只能用分號，姓名本身「姓,名」格式含逗號，不能拿逗號當邊界。 */
+const EN_PERSON_LIST_SEPARATOR = /[;；]/;
+
+/**
+ * 中文姓名清單的人與人邊界：分號、逗號（全形／半形）、頓號皆視為分隔符。
+ * 2026-08-28 業主回饋：內部系統的中文姓名清單常用逗號或頓號分隔多人，智慧局固定用分號，
+ * 中文姓名本身不含逗號，額外把逗號、頓號當分隔符不會誤拆姓名。
+ */
+const ZH_PERSON_LIST_SEPARATOR = /[;；,，、]/;
+
+/** 多人姓名清單：先依邊界字元切開、逐一正規化每個姓名，「忽略排列順序」開啟時再排序後比對。 */
+function normalizePersonList(value: string, options: NormalizationOptions, separator: RegExp): string {
   const names = value
-    .split(/[;；]/)
+    .split(separator)
     .map((n) => normalizeGenericText(n, options))
     .filter((n) => n.length > 0);
   if (options.ignorePersonOrder) names.sort();
@@ -217,8 +234,12 @@ export function fieldsMatch(
       nb = normalizePatentNoValue(rawB, options);
       break;
     case "personList":
-      na = normalizePersonList(rawA, options);
-      nb = normalizePersonList(rawB, options);
+      na = normalizePersonList(rawA, options, EN_PERSON_LIST_SEPARATOR);
+      nb = normalizePersonList(rawB, options, EN_PERSON_LIST_SEPARATOR);
+      break;
+    case "personListZh":
+      na = normalizePersonList(rawA, options, ZH_PERSON_LIST_SEPARATOR);
+      nb = normalizePersonList(rawB, options, ZH_PERSON_LIST_SEPARATOR);
       break;
     default:
       na = normalizeGenericText(rawA, options);
